@@ -18,6 +18,7 @@ use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
+use std::path::Path;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -45,7 +46,7 @@ impl fmt::Debug for State {
 }
 
 impl State {
-    fn register() -> Result<(), failure::Error> {
+    fn register() -> Result<State, failure::Error> {
         let app = mammut::apps::AppBuilder {
             client_name: "doomsayer",
             redirect_uris: "urn:ietf:wg:oauth:2.0:oob",
@@ -61,7 +62,27 @@ impl State {
         io::stdout().flush()?;
         let mut code = String::new();
         io::stdin().read_line(&mut code)?;
-        registration.create_access_token(code.to_string())?;
+        let mastodon = registration.create_access_token(code.to_string())?;
+        Ok(State {
+            access_token: mastodon.data,
+            last_successful_toot: None,
+        })
+    }
+
+    fn next_index(&self) -> usize {
+        self.last_successful_toot.map(|n| n + 1).unwrap_or(0)
+    }
+
+    fn toot_succeeded(self) -> State {
+        State {
+            last_successful_toot: Some(self.next_index()),
+            ..self
+        }
+    }
+
+    fn save_to<P: AsRef<Path>>(&self, path: P) -> Result<(), failure::Error> {
+        let file = File::create(path)?;
+        serde_json::to_writer_pretty(file, &self)?;
         Ok(())
     }
 }
@@ -91,20 +112,19 @@ fn main() -> Result<(), failure::Error> {
         Ok(f) => serde_json::from_reader(f)?,
         Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
             info!(log, "State file not found at {:?}", &opt.state);
-            State::register()?;
+            let state = State::register()?;
             info!(
                 log,
                 "Registration successful. doomsayer will post on the next run."
             );
-            return Ok(());
+            return state.save_to(&opt.state);
         }
         Err(e) => bail!(e),
     };
 
     info!(log, "Reading the next toot from {:?}", &opt.toots);
     let toots = io::BufReader::new(File::open(&opt.toots)?);
-    let toot_index = state.last_successful_toot.map(|n| n + 1).unwrap_or(0);
-    if let Some(maybe_line) = toots.lines().nth(toot_index) {
+    if let Some(maybe_line) = toots.lines().nth(state.next_index()) {
         match maybe_line {
             Ok(line) => {
                 info!(log, "Tooting {:?}", line);
@@ -112,6 +132,7 @@ fn main() -> Result<(), failure::Error> {
                 let toot =
                     mammut::Mastodon::from_data(state.access_token.clone()).new_status(builder)?;
                 info!(log, "Toot successful: {}", toot.uri);
+                state.toot_succeeded().save_to(&opt.state)
             }
             Err(e) => {
                 error!(log, "Could not read toot: {:?}", e);
@@ -120,13 +141,6 @@ fn main() -> Result<(), failure::Error> {
         }
     } else {
         info!(log, "All out of toots");
+        Ok(())
     }
-
-    let file = File::create(&opt.state)?;
-    let state = State {
-        last_successful_toot: Some(toot_index),
-        ..state
-    };
-    serde_json::to_writer_pretty(file, &state)?;
-    Ok(())
 }
