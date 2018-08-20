@@ -1,0 +1,7 @@
+[package]
+name = "doomsayer"
+version = "0.1.0"
+authors = ["Ash <relativistic.policeman@gmail.com>"]
+license = "MIT"
+
+[dependencies]
