@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate failure;
 extern crate mammut;
+extern crate openssl_probe;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
@@ -78,6 +79,7 @@ struct Opt {
 }
 
 fn main() -> Result<(), failure::Error> {
+    openssl_probe::init_ssl_cert_env_vars();
     let opt = Opt::from_args();
     let decorator = slog_term::TermDecorator::new().build();
     let drain = slog_term::CompactFormat::new(decorator).build().fuse();
