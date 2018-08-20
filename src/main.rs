@@ -95,7 +95,29 @@ fn main() -> Result<(), failure::Error> {
         }
         Err(e) => bail!(e),
     };
+
+    info!(log, "Reading the next toot from {:?}", &opt.toots);
+    let toots = io::BufReader::new(File::open(&opt.toots)?);
+    let toot_index = state.last_successful_toot.map(|n| n + 1).unwrap_or(0);
+    if let Some(maybe_line) = toots.lines().skip(toot_index).next() {
+        match maybe_line {
+            Ok(line) => {
+                info!(log, "Tooting {:?}", line);
+            }
+            Err(e) => {
+                error!(log, "Could not read toot: {:?}", e);
+                bail!(e)
+            }
+        }
+    } else {
+        info!(log, "All out of toots");
+    }
+
     let file = File::create(&opt.state)?;
-    serde_json::to_writer(file, &state)?;
+    let state = State {
+        last_successful_toot: Some(toot_index),
+        ..state
+    };
+    serde_json::to_writer_pretty(file, &state)?;
     Ok(())
 }
