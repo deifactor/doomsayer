@@ -99,7 +99,7 @@ fn main() -> Result<(), failure::Error> {
     info!(log, "Reading the next toot from {:?}", &opt.toots);
     let toots = io::BufReader::new(File::open(&opt.toots)?);
     let toot_index = state.last_successful_toot.map(|n| n + 1).unwrap_or(0);
-    if let Some(maybe_line) = toots.lines().skip(toot_index).next() {
+    if let Some(maybe_line) = toots.lines().nth(toot_index) {
         match maybe_line {
             Ok(line) => {
                 info!(log, "Tooting {:?}", line);
