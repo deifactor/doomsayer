@@ -103,6 +103,10 @@ fn main() -> Result<(), failure::Error> {
         match maybe_line {
             Ok(line) => {
                 info!(log, "Tooting {:?}", line);
+                let builder = mammut::status_builder::StatusBuilder::new(line);
+                let toot =
+                    mammut::Mastodon::from_data(state.access_token.clone()).new_status(builder)?;
+                info!(log, "Toot successful: {}", toot.uri);
             }
             Err(e) => {
                 error!(log, "Could not read toot: {:?}", e);
