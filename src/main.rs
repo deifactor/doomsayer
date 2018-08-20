@@ -43,7 +43,7 @@ impl fmt::Debug for State {
 }
 
 impl State {
-    fn register() -> Result<State, failure::Error> {
+    fn register() -> Result<(), failure::Error> {
         let app = mammut::apps::AppBuilder {
             client_name: "doomsayer",
             redirect_uris: "urn:ietf:wg:oauth:2.0:oob",
@@ -59,11 +59,8 @@ impl State {
         io::stdout().flush()?;
         let mut code = String::new();
         io::stdin().read_line(&mut code)?;
-        let mastodon = registration.create_access_token(code.to_string())?;
-        Ok(State {
-            access_token: mastodon.data,
-            last_successful_toot: None,
-        })
+        registration.create_access_token(code.to_string())?;
+        Ok(())
     }
 }
 
@@ -91,7 +88,12 @@ fn main() -> Result<(), failure::Error> {
         Ok(f) => serde_json::from_reader(f)?,
         Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
             info!(log, "State file not found at {:?}", &opt.state);
-            State::register()?
+            State::register()?;
+            info!(
+                log,
+                "Registration successful. doomsayer will post on the next run."
+            );
+            return Ok(());
         }
         Err(e) => bail!(e),
     };
